@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
-  Plus, Search, Building2, ChevronLeft, ChevronRight,
+  Plus, Search, Building2, ChevronLeft, ChevronRight, ChevronDown,
   Pencil, Trash2, X, AlertCircle, Check, Trash,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -813,6 +813,121 @@ function InstitutionModal({ mode, initial, editId, onClose, onSave }: ModalProps
   )
 }
 
+// ── 기관 상세 패널 ────────────────────────────────────────────────────────
+function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+      <div className="text-sm font-medium text-gray-800 truncate">
+        {value ?? <span className="text-gray-300 font-normal">-</span>}
+      </div>
+    </div>
+  )
+}
+
+function BoolBadge({ value, label }: { value: boolean; label: string }) {
+  return (
+    <span className={clsx('inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium',
+      value ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
+      {label}
+    </span>
+  )
+}
+
+function InstitutionDetail({ inst }: { inst: Institution }) {
+  return (
+    <div className="bg-slate-50 border-t-2 border-primary/20 px-6 py-5 space-y-5">
+      {/* 기본 정보 */}
+      <div>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">기본 정보</h4>
+        <div className="grid grid-cols-5 gap-x-6 gap-y-4">
+          <InfoItem label="기관코드" value={<span className="font-mono">{inst.code}</span>} />
+          <InfoItem label="그룹 기관코드" value={inst.groupCode ? <span className="font-mono">{inst.groupCode}</span> : null} />
+          <InfoItem label="기관명" value={inst.name} />
+          <InfoItem label="계약 유형" value={inst.contractTypeCode} />
+          <InfoItem label="영업 담당자" value={inst.salesManagerName} />
+          <InfoItem label="업종 구분" value={inst.businessTypeCode} />
+          <InfoItem label="AML 서비스" value={inst.amlServiceTypeCode} />
+          <InfoItem label="서비스 유형" value={inst.serviceTypeCode} />
+          <InfoItem label="사업자 번호" value={inst.businessNumber} />
+          <InfoItem label="상태" value={
+            <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium',
+              inst.status === 'ACTIVE' ? 'bg-green-100 text-green-700'
+              : inst.status === 'INACTIVE' ? 'bg-gray-100 text-gray-500'
+              : 'bg-red-100 text-red-600')}>
+              {inst.statusLabel}
+            </span>
+          } />
+        </div>
+      </div>
+
+      {/* 통신 정보 */}
+      <div>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">통신 정보</h4>
+        <div className="grid grid-cols-5 gap-x-6 gap-y-4">
+          <InfoItem label="통신 방식" value={inst.commLineTypeLabel
+            ? <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded font-medium">{inst.commLineTypeLabel}</span>
+            : null} />
+          <InfoItem label="API KEY" value={inst.apiKey
+            ? <span className="font-mono text-xs text-gray-600">{inst.apiKey.substring(0, 16)}…</span>
+            : null} />
+          <InfoItem label="통신 기관코드" value={inst.commInstitutionCode
+            ? <span className="font-mono">{inst.commInstitutionCode}</span> : null} />
+        </div>
+      </div>
+
+      {/* 추가 옵션 */}
+      <div>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">추가 옵션</h4>
+        <div className="grid grid-cols-5 gap-x-6 gap-y-4 mb-3">
+          <InfoItem label="전문 유형" value={inst.messageTypeCode} />
+          <InfoItem label="타임아웃 (ms)" value={inst.timeoutTerm?.toLocaleString()} />
+          <InfoItem label="응답 구분코드" value={inst.responseTypeCode} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <BoolBadge value={inst.useBalancing} label="밸런싱" />
+          <BoolBadge value={inst.useAgentFile} label="대행파일" />
+          <BoolBadge value={inst.useAgentTxNo} label="거래번호 채번" />
+          <BoolBadge value={inst.useDuplicateCheck} label="중복체크" />
+          <BoolBadge value={inst.useMasterAccount} label="모계좌" />
+        </div>
+      </div>
+
+      {/* 서비스 */}
+      <div>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">서비스</h4>
+        <div className="flex flex-wrap gap-2">
+          {inst.useValueAddedService ? (
+            <>
+              <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold">부가서비스</span>
+              {inst.useArs && <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">ARS ({inst.arsSources.length}개 원천사)</span>}
+              {inst.useOtp && <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">OTP · {inst.otpIssueMethod} · {inst.otpDigits}자리</span>}
+            </>
+          ) : <span className="text-xs text-gray-400">부가서비스 미사용</span>}
+        </div>
+        {inst.useFirmBanking && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className="px-2.5 py-1 bg-violet-100 text-violet-700 rounded-lg text-xs font-semibold">펌뱅킹</span>
+            {inst.useFbGeneral && <span className="px-2.5 py-1 bg-violet-50 text-violet-600 rounded-lg text-xs font-medium">일반</span>}
+            {inst.useFbRelay && <span className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium">중계 ({inst.relayTargets.length}개)</span>}
+            {inst.useFbResale && <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-xs font-medium">재판매 · {inst.resaleTypeCode}</span>}
+            {inst.useFbTrust && <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium">수탁 · {inst.trustTypeCode}</span>}
+            {inst.useFbRedebit && <span className="px-2.5 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium">재판출금</span>}
+          </div>
+        )}
+      </div>
+
+      {/* 메모 */}
+      {inst.memo && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">메모</h4>
+          <p className="text-sm text-gray-600 whitespace-pre-wrap bg-white rounded-lg px-4 py-3 border border-gray-100">{inst.memo}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── 삭제 확인 ──────────────────────────────────────────────────────────────
 function DeleteConfirmModal({ name, onConfirm, onClose }: { name: string; onConfirm: () => void; onClose: () => void }) {
   return (
@@ -849,6 +964,7 @@ export default function Institutions() {
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [editTarget, setEditTarget] = useState<Institution | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Institution | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
 
   const load = async (p = page) => {
     const params = new URLSearchParams({ page: String(p), size: '10' })
@@ -942,8 +1058,8 @@ export default function Institutions() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['기관코드', '그룹코드', '기관명', '업종', '서비스유형', '통신방식', 'ARS', 'OTP', '펌뱅킹', '상태', '등록일', ''].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap">{h}</th>
+                {['', '기관코드', '그룹코드', '기관명', '업종', '서비스유형', '통신방식', 'ARS', 'OTP', '펌뱅킹', '상태', '등록일', ''].map((h, i) => (
+                  <th key={i} className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -953,48 +1069,66 @@ export default function Institutions() {
                   <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30" />등록된 기관이 없습니다.
                 </td></tr>
               )}
-              {data?.content.map(inst => (
-                <tr key={inst.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
-                  <td className="px-3 py-3 font-mono text-xs font-semibold text-gray-700">{inst.code}</td>
-                  <td className="px-3 py-3 font-mono text-xs text-gray-400">{inst.groupCode ?? '-'}</td>
-                  <td className="px-3 py-3 font-medium text-gray-900">{inst.name}</td>
-                  <td className="px-3 py-3 text-gray-500 text-xs">{inst.businessTypeCode ?? '-'}</td>
-                  <td className="px-3 py-3 text-gray-500 text-xs">{inst.serviceTypeCode ?? '-'}</td>
-                  <td className="px-3 py-3">
-                    {inst.commLineType
-                      ? <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded font-medium">{inst.commLineTypeLabel}</span>
-                      : <span className="text-gray-300">-</span>}
-                  </td>
-                  {[inst.useArs, inst.useOtp, inst.useFirmBanking].map((v, i) => (
-                    <td key={i} className="px-3 py-3">
-                      <span className={clsx('px-2 py-1 text-xs rounded font-medium',
-                        v ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
-                        {v ? '사용' : '-'}
-                      </span>
-                    </td>
-                  ))}
-                  <td className="px-3 py-3">
-                    <span className={clsx('px-2.5 py-1 rounded-full text-xs font-medium', STATUS_BADGE[inst.status])}>
-                      {inst.statusLabel}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
-                    {new Date(inst.createdAt).toLocaleDateString('ko-KR')}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => { setEditTarget(inst); setModal('edit') }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setDeleteTarget(inst)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {data?.content.map(inst => {
+                const expanded = selectedId === inst.id
+                return (
+                  <React.Fragment key={inst.id}>
+                    <tr
+                      className={clsx('border-b border-gray-50 hover:bg-gray-50/60 transition-colors cursor-pointer',
+                        expanded && 'bg-primary/5 border-b-0')}
+                      onClick={() => setSelectedId(expanded ? null : inst.id)}>
+                      <td className="px-3 py-3 w-8">
+                        <ChevronDown className={clsx('w-4 h-4 text-gray-400 transition-transform', expanded && 'rotate-180')} />
+                      </td>
+                      <td className="px-3 py-3 font-mono text-xs font-semibold text-gray-700">{inst.code}</td>
+                      <td className="px-3 py-3 font-mono text-xs text-gray-400">{inst.groupCode ?? '-'}</td>
+                      <td className="px-3 py-3 font-medium text-gray-900">{inst.name}</td>
+                      <td className="px-3 py-3 text-gray-500 text-xs">{inst.businessTypeCode ?? '-'}</td>
+                      <td className="px-3 py-3 text-gray-500 text-xs">{inst.serviceTypeCode ?? '-'}</td>
+                      <td className="px-3 py-3">
+                        {inst.commLineType
+                          ? <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded font-medium">{inst.commLineTypeLabel}</span>
+                          : <span className="text-gray-300">-</span>}
+                      </td>
+                      {[inst.useArs, inst.useOtp, inst.useFirmBanking].map((v, i) => (
+                        <td key={i} className="px-3 py-3">
+                          <span className={clsx('px-2 py-1 text-xs rounded font-medium',
+                            v ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
+                            {v ? '사용' : '-'}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="px-3 py-3">
+                        <span className={clsx('px-2.5 py-1 rounded-full text-xs font-medium', STATUS_BADGE[inst.status])}>
+                          {inst.statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
+                        {new Date(inst.createdAt).toLocaleDateString('ko-KR')}
+                      </td>
+                      <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => { setEditTarget(inst); setModal('edit') }}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setDeleteTarget(inst)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="border-b border-primary/20">
+                        <td colSpan={14} className="p-0">
+                          <InstitutionDetail inst={inst} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
