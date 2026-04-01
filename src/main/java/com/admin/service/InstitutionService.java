@@ -31,6 +31,10 @@ public class InstitutionService {
         return new InstitutionResponse(findById(id));
     }
 
+    public List<String> getGroupCodes() {
+        return institutionRepository.findDistinctGroupCodes();
+    }
+
     @Transactional
     public InstitutionResponse create(InstitutionRequest request) {
         if (institutionRepository.existsByCode(request.getCode())) {

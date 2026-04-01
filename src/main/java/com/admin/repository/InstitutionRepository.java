@@ -7,9 +7,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface InstitutionRepository extends JpaRepository<Institution, Long> {
 
     boolean existsByCode(String code);
+
+    @Query("SELECT DISTINCT i.groupCode FROM Institution i WHERE i.groupCode IS NOT NULL AND i.groupCode <> '' ORDER BY i.groupCode")
+    List<String> findDistinctGroupCodes();
 
     @Query("SELECT i FROM Institution i WHERE " +
            "(:keyword IS NULL OR i.name LIKE %:keyword% OR i.code LIKE %:keyword% OR i.groupCode LIKE %:keyword%) AND " +

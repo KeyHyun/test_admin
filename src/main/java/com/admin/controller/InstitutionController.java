@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -29,6 +30,11 @@ public class InstitutionController {
             @RequestParam(required = false) Institution.Status status,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(institutionService.search(keyword, status, pageable));
+    }
+
+    @GetMapping("/group-codes")
+    public ResponseEntity<List<String>> getGroupCodes() {
+        return ResponseEntity.ok(institutionService.getGroupCodes());
     }
 
     @GetMapping("/{id}")

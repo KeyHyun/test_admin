@@ -82,22 +82,30 @@ function Toggle({ value, onChange, label, desc }: {
   )
 }
 
-function SectionBox({ title, desc, enabled, onToggle, onEdit, children }: {
+function SectionBox({ title, desc, enabled, onToggle, onEdit, configured = true, children }: {
   title: string; desc?: string; enabled: boolean; onToggle: (v: boolean) => void
-  onEdit?: () => void; children?: React.ReactNode
+  onEdit?: () => void; configured?: boolean; children?: React.ReactNode
 }) {
+  const warn = enabled && !configured
   return (
     <div className={clsx('rounded-xl border-2 transition-colors overflow-hidden',
-      enabled ? 'border-primary/30' : 'border-gray-100')}>
-      <div className={clsx('flex items-center justify-between px-5 py-4', enabled ? 'bg-primary/5' : 'bg-gray-50')}>
+      warn ? 'border-orange-200' : enabled ? 'border-primary/30' : 'border-gray-100')}>
+      <div className={clsx('flex items-center justify-between px-5 py-4',
+        warn ? 'bg-orange-50' : enabled ? 'bg-primary/5' : 'bg-gray-50')}>
         <div>
-          <p className={clsx('font-semibold', enabled ? 'text-primary' : 'text-gray-700')}>{title}</p>
+          <div className="flex items-center gap-2">
+            <p className={clsx('font-semibold', warn ? 'text-orange-600' : enabled ? 'text-primary' : 'text-gray-700')}>{title}</p>
+            {warn && (
+              <span className="text-xs bg-orange-100 text-orange-500 px-2 py-0.5 rounded-full font-medium">미구성</span>
+            )}
+          </div>
           {desc && <p className="text-xs text-gray-400 mt-0.5">{desc}</p>}
         </div>
         <div className="flex items-center gap-2">
           {enabled && onEdit && (
             <button type="button" onClick={onEdit}
-              className="text-xs text-primary font-medium px-3 py-1.5 rounded-lg border border-primary/30 hover:bg-primary/10 transition-colors">
+              className={clsx('text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors',
+                warn ? 'text-orange-600 border-orange-200 hover:bg-orange-100' : 'text-primary border-primary/30 hover:bg-primary/10')}>
               설정 편집
             </button>
           )}
@@ -107,6 +115,77 @@ function SectionBox({ title, desc, enabled, onToggle, onEdit, children }: {
       {enabled && !onEdit && children && (
         <div className="px-5 py-4 border-t border-gray-100 space-y-4">{children}</div>
       )}
+    </div>
+  )
+}
+
+// ── 그룹 기관코드 조회 모달 ───────────────────────────────────────────────
+function GroupCodePickerModal({ onSelect, onClose }: {
+  onSelect: (code: string) => void
+  onClose: () => void
+}) {
+  const [codes, setCodes] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [newCode, setNewCode] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/api/institutions/group-codes')
+      .then(r => setCodes(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = codes.filter(c => c.toLowerCase().includes(search.toLowerCase()))
+  const newCodeValid = /^[A-Z0-9]{2,20}$/.test(newCode)
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style={{ maxHeight: '70vh' }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="text-base font-semibold text-gray-900">그룹 기관코드 조회</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+          <input className="form-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="코드 검색..." />
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-2">
+          {loading ? (
+            <p className="text-center text-sm text-gray-400 py-4">불러오는 중...</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-4">조회된 코드가 없습니다.</p>
+          ) : (
+            <ul className="space-y-1">
+              {filtered.map(code => (
+                <li key={code} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                  <span className="font-mono text-sm text-gray-800">{code}</span>
+                  <button type="button" onClick={() => { onSelect(code); onClose() }}
+                    className="text-xs text-primary font-medium px-3 py-1 rounded-lg border border-primary/30 hover:bg-primary/10 transition-colors">
+                    선택
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl shrink-0">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">신규 등록</p>
+          <div className="flex gap-2">
+            <input className="form-input flex-1 font-mono" value={newCode}
+              onChange={e => setNewCode(e.target.value.toUpperCase())} placeholder="새 코드 입력 (2~20자)" />
+            <button type="button" disabled={!newCodeValid}
+              onClick={() => { onSelect(newCode); onClose() }}
+              className="btn-primary whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
+              등록 후 선택
+            </button>
+          </div>
+          {newCode && !newCodeValid && (
+            <p className="text-xs text-red-400 mt-1">영문 대문자/숫자 2~20자로 입력하세요.</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -147,6 +226,7 @@ function Stepper({ current, completed }: { current: StepIndex; completed: Set<nu
 
 // ── Step 1: 기본 + 통신 정보 ────────────────────────────────────────────────
 function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; isEdit: boolean }) {
+  const [showGroupPicker, setShowGroupPicker] = useState(false)
   const showApiKey = form.commLineType === 'INTERNET' || form.commLineType === 'API' || form.commLineType === 'VPN'
   const showCommCode = form.commLineType === 'DEDICATED' || form.commLineType === 'VPN'
   return (
@@ -161,8 +241,20 @@ function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; i
               placeholder="KBKR01" required disabled={isEdit} />
           </Field>
           <Field label="그룹 기관코드">
-            <input className="form-input" value={form.groupCode}
-              onChange={e => set('groupCode', e.target.value.toUpperCase())} placeholder="KBGRP" />
+            <div className="relative">
+              <input className="form-input pr-14" value={form.groupCode}
+                onChange={e => set('groupCode', e.target.value.toUpperCase())} placeholder="KBGRP" />
+              <button type="button" onClick={() => setShowGroupPicker(true)}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-primary font-semibold px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 transition-colors">
+                조회
+              </button>
+            </div>
+            {showGroupPicker && (
+              <GroupCodePickerModal
+                onSelect={code => set('groupCode', code)}
+                onClose={() => setShowGroupPicker(false)}
+              />
+            )}
           </Field>
           <Field label="기관명" required>
             <input className="form-input" value={form.name}
@@ -652,15 +744,19 @@ function Step3({ form, set, onEditService }: {
   form: InstitutionFormData; set: SetFn
   onEditService: (key: ServiceKey) => void
 }) {
+  const vasConfigured = form.useArs || form.useOtp
+  const fbConfigured = form.useFbGeneral || form.useFbTrust || form.useFbRedebit
   return (
     <div className="space-y-4">
       <SectionBox title="부가서비스" desc="ARS, OTP 등 부가 서비스 설정"
         enabled={form.useValueAddedService}
+        configured={vasConfigured}
         onToggle={v => { set('useValueAddedService', v); if (v) onEditService('vas'); else { set('useArs', false); set('useOtp', false) } }}
         onEdit={() => onEditService('vas')}
       />
       <SectionBox title="펌뱅킹" desc="펌뱅킹 서비스 (일반/수탁/재판출금)"
         enabled={form.useFirmBanking}
+        configured={fbConfigured}
         onToggle={v => { set('useFirmBanking', v); if (v) onEditService('firmbanking'); else { set('useFbGeneral', false); set('useFbRelay', false); set('useFbResale', false); set('useFbTrust', false); set('useFbRedebit', false) } }}
         onEdit={() => onEditService('firmbanking')}
       />
@@ -825,11 +921,19 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-function BoolBadge({ value, label }: { value: boolean; label: string }) {
+function BoolBadge({ value, label, desc }: { value: boolean; label: string; desc?: string }) {
   return (
-    <span className={clsx('inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium',
-      value ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
-      {label}
+    <span className="relative group/tip">
+      <span className={clsx('inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium cursor-default',
+        value ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
+        {label}
+      </span>
+      {desc && (
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 pointer-events-none transition-opacity z-20 shadow-lg">
+          {desc}
+          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+        </span>
+      )}
     </span>
   )
 }
@@ -885,11 +989,11 @@ function InstitutionDetail({ inst }: { inst: Institution }) {
           <InfoItem label="응답 구분코드" value={inst.responseTypeCode} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <BoolBadge value={inst.useBalancing} label="밸런싱" />
-          <BoolBadge value={inst.useAgentFile} label="대행파일" />
-          <BoolBadge value={inst.useAgentTxNo} label="거래번호 채번" />
-          <BoolBadge value={inst.useDuplicateCheck} label="중복체크" />
-          <BoolBadge value={inst.useMasterAccount} label="모계좌" />
+          <BoolBadge value={inst.useBalancing} label="밸런싱" desc="트래픽 로드 밸런싱 사용 여부" />
+          <BoolBadge value={inst.useAgentFile} label="대행파일" desc="배치 대행파일 처리 기능 여부" />
+          <BoolBadge value={inst.useAgentTxNo} label="거래번호 채번" desc="거래번호 자동 채번 여부 (대행파일 처리 시 적용)" />
+          <BoolBadge value={inst.useDuplicateCheck} label="중복체크" desc="동일 거래 중복 처리 방지 여부" />
+          <BoolBadge value={inst.useMasterAccount} label="모계좌" desc="모계좌 기반 계좌 관리 여부" />
         </div>
       </div>
 
