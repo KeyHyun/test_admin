@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/sokim/.claude/projects/C--Users-sokim-IdeaProjects-admin/memory//**)",
+      "Read(//c/Users/sokim/.claude/projects/C--Users-sokim-IdeaProjects-admin/memory/**)",
+      "Read(//tmp/**)",
+      "Bash(export JAVA_HOME=\"/c/Users/sokim/.jdks/ms-21.0.10\" export PATH=\"$JAVA_HOME/bin:$PATH\" cd /c/Users/sokim/IdeaProjects/admin ./gradlew bootRun --debug)",
+      "Bash(netstat -ano)",
+      "Bash(curl:*)",
+      "Bash(tasklist)",
+      "Bash(./gradlew compileJava)",
+      "Bash(JAVA_HOME=/c/Program Files/Java/jdk-21 ./gradlew compileJava)",
+      "Read(//c//**)",
+      "Bash(where java.exe)",
+      "Read(//c/Users/sokim/.jdks//**)",
+      "Read(//c/Users/sokim/AppData/Local/Programs//**)",
+      "Bash(JAVA_HOME=\"C:/Users/sokim/AppData/Local/Programs/ms-21.0.10\" ./gradlew compileJava)",
+      "Bash(JAVA_HOME=\"/c/Users/sokim/.jdks/ms-21.0.10\" ./gradlew compileJava)",
+      "Bash(npx tsc:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(/dev/null ls:*)",
+      "Bash(JAVA_HOME=\"/c/Program Files/JetBrains/IntelliJ IDEA 2026.1/jbr\")",
+      "Bash(\"$JAVA_HOME/bin/java\" -version)",
+      "Bash(export JAVA_HOME=\"/c/Program Files/JetBrains/IntelliJ IDEA 2026.1/jbr\")",
+      "Bash(export PATH=\"$JAVA_HOME/bin:$PATH\")",
+      "Bash(./gradlew compileJava --stacktrace)",
+      "Bash(export JAVA_HOME=\"$HOME/.jdks/ms-21.0.10\")",
+      "Bash(tasklist /FI 'PID eq 8520')",
+      "Bash(wmic process:*)",
+      "Bash(taskkill:*)",
+      "Bash(xargs grep:*)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs cat:*)",
+      "Bash(xargs -I{} taskkill //F //PID {})"
+    ]
+  }
+}
