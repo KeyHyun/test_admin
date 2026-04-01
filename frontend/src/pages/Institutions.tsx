@@ -118,7 +118,6 @@ function Stepper({ current, completed }: { current: StepIndex; completed: Set<nu
       {STEPS.map((label, i) => {
         const done = completed.has(i)
         const active = i === current
-        const reachable = done || i === current
         return (
           <div key={i} className="flex items-center flex-1 last:flex-none">
             <div className="flex flex-col items-center gap-1">
@@ -732,9 +731,6 @@ function InstitutionModal({ mode, initial, editId, onClose, onSave }: ModalProps
     setStep(prev => Math.max(prev - 1, 0) as StepIndex)
   }
 
-  const jumpTo = (i: number) => {
-    if (completed.has(i) || i < step) { setStepErrors([]); setStep(i as StepIndex) }
-  }
 
   const handleSave = async () => {
     const errs = validateStep(step, form)
