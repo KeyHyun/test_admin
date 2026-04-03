@@ -1,3 +1,7 @@
+databases:
+  - name: admin-db
+    plan: free
+
 services:
   - type: web
     name: admin-dashboard
@@ -7,3 +11,23 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
+      - key: DB_HOST
+        fromDatabase:
+          name: admin-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: admin-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: admin-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: admin-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: admin-db
+          property: password
