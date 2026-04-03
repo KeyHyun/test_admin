@@ -1,19 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import {
   Plus, Search, Building2, ChevronLeft, ChevronRight, ChevronDown,
-  Pencil, Trash2, X, AlertCircle, Check, Trash,
+  Pencil, Trash2, X, AlertCircle, Check, Trash, RefreshCw,
 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../api/axios'
 import {
   Institution, InstitutionFormData, InstitutionStatus, CommLineType,
-  ArsSource, RelayTarget, STATUS_LABELS, COMM_LINE_LABELS, OTP_METHOD_LABELS,
-  CONTRACT_TYPE_OPTIONS, BUSINESS_TYPE_OPTIONS, AML_TYPE_OPTIONS,
-  SERVICE_TYPE_OPTIONS, RESPONSE_TYPE_OPTIONS, MESSAGE_TYPE_OPTIONS,
-
-  RESALE_TYPE_OPTIONS, TRUST_TYPE_OPTIONS, TRUST_SETTLEMENT_CYCLE_OPTIONS,
-  REDEBIT_TYPE_OPTIONS, REDEBIT_PROCESS_TYPE_OPTIONS, Page,
+  ArsSource, RelayTarget, STATUS_LABELS, OTP_METHOD_LABELS, Page,
+  BalancingItem, BalancingTxType, BalancingBank,
 } from '../types'
+import { useCodeTable } from '../hooks/useCodeTable'
 
 // ── 초기 폼 ────────────────────────────────────────────────────────────────
 const EMPTY_FORM: InstitutionFormData = {
@@ -32,6 +29,7 @@ const EMPTY_FORM: InstitutionFormData = {
   trustTypeCode: '', trustLimitAmount: '', trustSettlementCycleCode: '',
   useFbRedebit: false,
   redebitTypeCode: '', redebitDailyLimitAmount: '', redebitInstitutionCode: '', redebitProcessTypeCode: '',
+  balancingItems: [],
 }
 
 const STEPS = ['기본 정보', '메모', '서비스 분류'] as const
@@ -224,11 +222,186 @@ function Stepper({ current, completed }: { current: StepIndex; completed: Set<nu
   )
 }
 
+// ── 밸런싱 통합설정 모달 ──────────────────────────────────────────────────────
+const BALANCING_TX_LABELS: Record<BalancingTxType, string> = {
+  REMITTANCE:       '송금',
+  ACCOUNT_INQUIRY:  '예금주 조회',
+}
+
+function IntegratedSettingsModal({ txType, onClose }: { txType: BalancingTxType; onClose: () => void }) {
+  // TODO: DB 연동 시 GET /api/balancing/integrated?txType={txType} 로 교체
+  const mockData = [
+    { bankCode: 'KB001', bankName: '국민은행',   weight: 30 },
+    { bankCode: 'NH002', bankName: '농협은행',   weight: 40 },
+    { bankCode: 'SH003', bankName: '신한은행',   weight: 30 },
+  ]
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h3 className="font-semibold text-gray-900">{BALANCING_TX_LABELS[txType]} 통합 밸런싱 설정</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-gray-500 border-b border-gray-100">
+                <th className="text-left py-2 font-medium">은행코드</th>
+                <th className="text-left py-2 font-medium">은행명</th>
+                <th className="text-right py-2 font-medium">Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockData.map(row => (
+                <tr key={row.bankCode} className="border-b border-gray-50">
+                  <td className="py-2 font-mono text-xs text-gray-500">{row.bankCode}</td>
+                  <td className="py-2 text-gray-700">{row.bankName}</td>
+                  <td className="py-2 text-right font-medium text-gray-700">{row.weight}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-gray-400 mt-3">* 통합 설정은 별도 관리 화면에서 수정할 수 있습니다.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 밸런싱 설정 ───────────────────────────────────────────────────────────────
+const BALANCING_TX_TYPES: { value: BalancingTxType; label: string }[] = [
+  { value: 'REMITTANCE',      label: '송금' },
+  { value: 'ACCOUNT_INQUIRY', label: '예금주 조회' },
+]
+
+function BalancingConfig({ form, set }: { form: InstitutionFormData; set: SetFn }) {
+  const [integratedModal, setIntegratedModal] = useState<BalancingTxType | null>(null)
+  const items = form.balancingItems
+
+  const getItem = (txType: BalancingTxType) => items.find(i => i.txType === txType)
+
+  const toggleTxType = (txType: BalancingTxType, checked: boolean) => {
+    if (checked) {
+      set('balancingItems', [...items, { txType, mode: 'INTEGRATED', banks: [] }])
+    } else {
+      set('balancingItems', items.filter(i => i.txType !== txType))
+    }
+  }
+
+  const setMode = (txType: BalancingTxType, mode: BalancingItem['mode']) => {
+    set('balancingItems', items.map(i => i.txType === txType ? { ...i, mode, banks: [] } : i))
+  }
+
+  const addBank = (txType: BalancingTxType) => {
+    set('balancingItems', items.map(i => i.txType === txType
+      ? { ...i, banks: [...i.banks, { bankCode: '', bankName: '', weight: '' }] } : i))
+  }
+
+  const updateBank = (txType: BalancingTxType, idx: number, field: keyof BalancingBank, value: BalancingBank[keyof BalancingBank]) => {
+    set('balancingItems', items.map(i => i.txType === txType
+      ? { ...i, banks: i.banks.map((b, bi) => bi === idx ? { ...b, [field]: value } : b) } : i))
+  }
+
+  const removeBank = (txType: BalancingTxType, idx: number) => {
+    set('balancingItems', items.map(i => i.txType === txType
+      ? { ...i, banks: i.banks.filter((_, bi) => bi !== idx) } : i))
+  }
+
+  return (
+    <div className="pl-4 border-l-2 border-primary/30 space-y-4 pt-1">
+      {BALANCING_TX_TYPES.map(({ value, label }) => {
+        const item = getItem(value)
+        return (
+          <div key={value} className="space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={!!item}
+                onChange={e => toggleTxType(value, e.target.checked)}
+                className="w-4 h-4 accent-primary rounded" />
+              <span className="text-sm font-medium text-gray-700">{label}</span>
+            </label>
+
+            {item && (
+              <div className="pl-6 space-y-3">
+                {/* 통합 / 개별 선택 */}
+                <div className="flex items-center gap-5">
+                  {(['INTEGRATED', 'INDIVIDUAL'] as const).map(mode => (
+                    <label key={mode} className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="radio" name={`balancing-mode-${value}`}
+                        checked={item.mode === mode}
+                        onChange={() => setMode(value, mode)}
+                        className="accent-primary" />
+                      <span className="text-sm text-gray-700">{mode === 'INTEGRATED' ? '통합' : '개별'}</span>
+                    </label>
+                  ))}
+                  {item.mode === 'INTEGRATED' && (
+                    <button type="button"
+                      onClick={() => setIntegratedModal(value)}
+                      className="text-xs text-primary font-medium underline underline-offset-2 hover:text-primary/80">
+                      통합설정 보기
+                    </button>
+                  )}
+                </div>
+
+                {/* 개별 은행/weight 입력 */}
+                {item.mode === 'INDIVIDUAL' && (
+                  <div className="space-y-2">
+                    {item.banks.length > 0 && (
+                      <div className="grid grid-cols-[6rem_1fr_5rem_2rem] gap-2 px-1">
+                        <span className="text-xs text-gray-400 font-medium">은행코드</span>
+                        <span className="text-xs text-gray-400 font-medium">은행명</span>
+                        <span className="text-xs text-gray-400 font-medium">Weight</span>
+                        <span />
+                      </div>
+                    )}
+                    {item.banks.map((bank, idx) => (
+                      <div key={idx} className="grid grid-cols-[6rem_1fr_5rem_2rem] gap-2 items-center">
+                        <input className="form-input text-xs" value={bank.bankCode}
+                          onChange={e => updateBank(value, idx, 'bankCode', e.target.value)}
+                          placeholder="KB001" />
+                        <input className="form-input text-xs" value={bank.bankName}
+                          onChange={e => updateBank(value, idx, 'bankName', e.target.value)}
+                          placeholder="은행명" />
+                        <input type="number" className="form-input text-xs" value={bank.weight}
+                          onChange={e => updateBank(value, idx, 'weight', e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="0" min={0} max={100} />
+                        <button type="button" onClick={() => removeBank(value, idx)}
+                          className="p-1 text-gray-300 hover:text-red-500 transition-colors">
+                          <Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addBank(value)}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline mt-1">
+                      <Plus className="w-3.5 h-3.5" /> 은행 추가
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {integratedModal && (
+        <IntegratedSettingsModal txType={integratedModal} onClose={() => setIntegratedModal(null)} />
+      )}
+    </div>
+  )
+}
+
 // ── Step 1: 기본 + 통신 정보 ────────────────────────────────────────────────
 function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; isEdit: boolean }) {
   const [showGroupPicker, setShowGroupPicker] = useState(false)
-  const showApiKey = form.commLineType === 'INTERNET' || form.commLineType === 'API' || form.commLineType === 'VPN'
-  const showCommCode = form.commLineType === 'DEDICATED' || form.commLineType === 'VPN'
+  const contractTypes  = useCodeTable('CONTRACT_TYPE')
+  const commLineTypes  = useCodeTable('COMM_LINE_TYPE')
+  const messageTypes   = useCodeTable('MESSAGE_TYPE')
+  const responseTypes  = useCodeTable('RESPONSE_TYPE')
+  const amlTypes       = useCodeTable('AML_TYPE')
+  const serviceTypes   = useCodeTable('SERVICE_TYPE')
+
+  // 공중망 계열 → API KEY 필요, VPN 계열 → 통신기관코드 필요
+  const showApiKey   = form.commLineType === 'PUBLIC' || form.commLineType === 'PUBLIC_VPN'
+  const showCommCode = form.commLineType === 'DEDICATED' || form.commLineType === 'PUBLIC_VPN' || form.commLineType === 'DEDICATED_VPN'
   return (
     <div className="space-y-5">
       {/* 기본 정보 */}
@@ -262,15 +435,15 @@ function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; i
           </Field>
           <Field label="계약 유형코드">
             <Sel value={form.contractTypeCode} onChange={v => set('contractTypeCode', v)}
-              options={CONTRACT_TYPE_OPTIONS} placeholder="선택" />
+              options={contractTypes} placeholder="선택" />
           </Field>
           <Field label="영업 담당자명">
             <input className="form-input" value={form.salesManagerName}
               onChange={e => set('salesManagerName', e.target.value)} placeholder="담당자명" />
           </Field>
           <Field label="업종 구분코드">
-            <Sel value={form.businessTypeCode} onChange={v => set('businessTypeCode', v)}
-              options={BUSINESS_TYPE_OPTIONS} placeholder="선택" />
+            <input className="form-input" value={form.businessTypeCode}
+              onChange={e => set('businessTypeCode', e.target.value)} placeholder="업종 구분코드 입력" />
           </Field>
           <Field label="기관 상태코드" required>
             <Sel value={form.status} onChange={v => set('status', v as InstitutionStatus)}
@@ -278,11 +451,11 @@ function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; i
           </Field>
           <Field label="AML 서비스 유형코드">
             <Sel value={form.amlServiceTypeCode} onChange={v => set('amlServiceTypeCode', v)}
-              options={AML_TYPE_OPTIONS} placeholder="선택" />
+              options={amlTypes} placeholder="선택" />
           </Field>
           <Field label="서비스 유형코드">
             <Sel value={form.serviceTypeCode} onChange={v => set('serviceTypeCode', v)}
-              options={SERVICE_TYPE_OPTIONS} placeholder="선택" />
+              options={serviceTypes} placeholder="선택" />
           </Field>
           <Field label="사업자 번호" hint="123-45-67890">
             <input className="form-input" value={form.businessNumber}
@@ -297,14 +470,20 @@ function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; i
         <div className="space-y-4">
           <Field label="통신 회선 종류">
             <Sel value={form.commLineType ?? ''} onChange={v => set('commLineType', v as CommLineType | '')}
-              options={Object.entries(COMM_LINE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
-              placeholder="선택" />
+              options={commLineTypes} placeholder="선택" />
           </Field>
           {showApiKey && (
             <div className="pl-4 border-l-2 border-primary/30">
               <Field label="API KEY" hint="인터넷/API/VPN 방식 통신 시 사용">
-                <input className="form-input font-mono text-xs" value={form.apiKey}
-                  onChange={e => set('apiKey', e.target.value)} placeholder="API Key 입력" />
+                <div className="flex gap-2">
+                  <input className="form-input font-mono text-xs flex-1" value={form.apiKey}
+                    onChange={e => set('apiKey', e.target.value)} placeholder="API Key 입력" />
+                  <button type="button"
+                    onClick={() => set('apiKey', Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b => b.toString(16).padStart(2, '0')).join(''))}
+                    className="shrink-0 flex items-center gap-1 px-3 py-2 text-xs font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    <RefreshCw size={12} />생성
+                  </button>
+                </div>
               </Field>
             </div>
           )}
@@ -325,7 +504,7 @@ function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; i
         <div className="grid grid-cols-2 gap-4 mb-4">
           <Field label="전문 유형코드">
             <Sel value={form.messageTypeCode} onChange={v => set('messageTypeCode', v)}
-              options={MESSAGE_TYPE_OPTIONS} placeholder="선택" />
+              options={messageTypes} placeholder="선택" />
           </Field>
           <Field label="타임아웃 TERM (ms)">
             <input type="number" className="form-input" value={form.timeoutTerm}
@@ -334,12 +513,16 @@ function Step1({ form, set, isEdit }: { form: InstitutionFormData; set: SetFn; i
           </Field>
           <Field label="응답 구분코드">
             <Sel value={form.responseTypeCode} onChange={v => set('responseTypeCode', v)}
-              options={RESPONSE_TYPE_OPTIONS} placeholder="선택" />
+              options={responseTypes} placeholder="선택" />
           </Field>
         </div>
         <div className="space-y-3">
+          <div className="py-3 border-b border-gray-50 space-y-3">
+            <Toggle value={form.useBalancing} onChange={v => set('useBalancing', v)}
+              label="밸런싱 사용 여부" desc="트래픽 로드 밸런싱 사용" />
+            {form.useBalancing && <BalancingConfig form={form} set={set} />}
+          </div>
           {[
-            { key: 'useBalancing', label: '밸런싱 사용 여부', desc: '트래픽 로드 밸런싱 사용' },
             { key: 'useAgentFile', label: '대행파일 처리여부', desc: '배치 대행파일 처리 기능' },
             { key: 'useAgentTxNo', label: '거래번호 대행 채번 여부', desc: '거래번호 자동 채번' },
             { key: 'useDuplicateCheck', label: '중복 체크여부', desc: '동일 거래 중복 처리 방지' },
@@ -664,7 +847,7 @@ function FirmBankingSubModal({ form, set, onClose }: { form: InstitutionFormData
                       </Field>
                       <Field label="재판매 유형">
                         <Sel value={form.resaleTypeCode} onChange={v => set('resaleTypeCode', v)}
-                          options={RESALE_TYPE_OPTIONS} placeholder="선택" />
+                          options={resaleTypes} placeholder="선택" />
                       </Field>
                       <Field label="마진율 (%)">
                         <input type="number" className="form-input" value={form.resaleMarginRate}
@@ -685,7 +868,7 @@ function FirmBankingSubModal({ form, set, onClose }: { form: InstitutionFormData
               <div className="grid grid-cols-3 gap-4">
                 <Field label="수탁 유형">
                   <Sel value={form.trustTypeCode} onChange={v => set('trustTypeCode', v)}
-                    options={TRUST_TYPE_OPTIONS} placeholder="선택" />
+                    options={trustTypes} placeholder="선택" />
                 </Field>
                 <Field label="한도 금액">
                   <input type="number" className="form-input" value={form.trustLimitAmount}
@@ -694,7 +877,7 @@ function FirmBankingSubModal({ form, set, onClose }: { form: InstitutionFormData
                 </Field>
                 <Field label="정산 주기">
                   <Sel value={form.trustSettlementCycleCode} onChange={v => set('trustSettlementCycleCode', v)}
-                    options={TRUST_SETTLEMENT_CYCLE_OPTIONS} placeholder="선택" />
+                    options={trustSettlementCycles} placeholder="선택" />
                 </Field>
               </div>
             </div>
@@ -707,7 +890,7 @@ function FirmBankingSubModal({ form, set, onClose }: { form: InstitutionFormData
               <div className="grid grid-cols-2 gap-4">
                 <Field label="재판출금 유형">
                   <Sel value={form.redebitTypeCode} onChange={v => set('redebitTypeCode', v)}
-                    options={REDEBIT_TYPE_OPTIONS} placeholder="선택" />
+                    options={redebitTypes} placeholder="선택" />
                 </Field>
                 <Field label="일 한도 금액">
                   <input type="number" className="form-input" value={form.redebitDailyLimitAmount}
@@ -720,7 +903,7 @@ function FirmBankingSubModal({ form, set, onClose }: { form: InstitutionFormData
                 </Field>
                 <Field label="처리 유형">
                   <Sel value={form.redebitProcessTypeCode} onChange={v => set('redebitProcessTypeCode', v)}
-                    options={REDEBIT_PROCESS_TYPE_OPTIONS} placeholder="선택" />
+                    options={redebitProcessTypes} placeholder="선택" />
                 </Field>
               </div>
             </div>
@@ -744,6 +927,12 @@ function Step3({ form, set, onEditService }: {
   form: InstitutionFormData; set: SetFn
   onEditService: (key: ServiceKey) => void
 }) {
+  const resaleTypes           = useCodeTable('RESALE_TYPE')
+  const trustTypes            = useCodeTable('TRUST_TYPE')
+  const trustSettlementCycles = useCodeTable('TRUST_SETTLEMENT_CYCLE')
+  const redebitTypes          = useCodeTable('REDEBIT_TYPE')
+  const redebitProcessTypes   = useCodeTable('REDEBIT_PROCESS_TYPE')
+
   const vasConfigured = form.useArs || form.useOtp
   const fbConfigured = form.useFbGeneral || form.useFbTrust || form.useFbRedebit
   return (
@@ -775,9 +964,9 @@ function validateStep(step: StepIndex, form: InstitutionFormData): string[] {
   if (step === 0) {
     if (!form.code.match(/^[A-Z0-9]{2,20}$/)) errs.push('기관코드는 영문 대문자/숫자 2~20자이어야 합니다.')
     if (!form.name.trim()) errs.push('기관명을 입력해주세요.')
-    const needsApiKey = ['INTERNET', 'API', 'VPN'].includes(form.commLineType)
+    const needsApiKey = ['PUBLIC', 'PUBLIC_VPN'].includes(form.commLineType)
     if (needsApiKey && !form.apiKey.trim()) errs.push('API KEY를 입력해주세요.')
-    const needsCommCode = ['DEDICATED', 'VPN'].includes(form.commLineType)
+    const needsCommCode = ['DEDICATED', 'PUBLIC_VPN', 'DEDICATED_VPN'].includes(form.commLineType)
     if (needsCommCode && !form.commInstitutionCode.trim()) errs.push('통신 기관코드를 입력해주세요.')
   }
   if (step === 2) {
@@ -1121,16 +1310,17 @@ export default function Institutions() {
     trustTypeCode: inst.trustTypeCode ?? '', trustLimitAmount: inst.trustLimitAmount ?? '', trustSettlementCycleCode: inst.trustSettlementCycleCode ?? '',
     useFbRedebit: inst.useFbRedebit,
     redebitTypeCode: inst.redebitTypeCode ?? '', redebitDailyLimitAmount: inst.redebitDailyLimitAmount ?? '', redebitInstitutionCode: inst.redebitInstitutionCode ?? '', redebitProcessTypeCode: inst.redebitProcessTypeCode ?? '',
+    balancingItems: inst.balancingItems ?? [],
   })
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">기관 관리</h1>
           <p className="text-sm text-gray-500 mt-1">등록된 기관을 조회하고 관리합니다.</p>
         </div>
-        <button onClick={() => setModal('create')} className="btn-primary flex items-center gap-2">
+        <button onClick={() => setModal('create')} className="btn-primary flex items-center gap-2 shrink-0">
           <Plus className="w-4 h-4" /> 기관 등록
         </button>
       </div>
@@ -1158,18 +1348,28 @@ export default function Institutions() {
             전체 <span className="text-primary font-bold">{data?.totalElements ?? 0}</span> 건
           </span>
         </div>
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['', '기관코드', '그룹코드', '기관명', '업종', '서비스유형', '통신방식', 'ARS', 'OTP', '펌뱅킹', '상태', '등록일', ''].map((h, i) => (
-                  <th key={i} className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap">{h}</th>
-                ))}
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 w-8"></th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap">기관코드</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden lg:table-cell">그룹코드</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap">기관명</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden xl:table-cell">업종</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden xl:table-cell">서비스유형</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden md:table-cell">통신방식</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden lg:table-cell">ARS</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden lg:table-cell">OTP</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden md:table-cell">펌뱅킹</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap">상태</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3 whitespace-nowrap hidden lg:table-cell">등록일</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-3 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {data?.content.length === 0 && (
-                <tr><td colSpan={12} className="text-center text-gray-400 py-16">
+                <tr><td colSpan={13} className="text-center text-gray-400 py-16">
                   <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30" />등록된 기관이 없습니다.
                 </td></tr>
               )}
@@ -1185,29 +1385,39 @@ export default function Institutions() {
                         <ChevronDown className={clsx('w-4 h-4 text-gray-400 transition-transform', expanded && 'rotate-180')} />
                       </td>
                       <td className="px-3 py-3 font-mono text-xs font-semibold text-gray-700">{inst.code}</td>
-                      <td className="px-3 py-3 font-mono text-xs text-gray-400">{inst.groupCode ?? '-'}</td>
+                      <td className="px-3 py-3 font-mono text-xs text-gray-400 hidden lg:table-cell">{inst.groupCode ?? '-'}</td>
                       <td className="px-3 py-3 font-medium text-gray-900">{inst.name}</td>
-                      <td className="px-3 py-3 text-gray-500 text-xs">{inst.businessTypeCode ?? '-'}</td>
-                      <td className="px-3 py-3 text-gray-500 text-xs">{inst.serviceTypeCode ?? '-'}</td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 text-gray-500 text-xs hidden xl:table-cell">{inst.businessTypeCode ?? '-'}</td>
+                      <td className="px-3 py-3 text-gray-500 text-xs hidden xl:table-cell">{inst.serviceTypeCode ?? '-'}</td>
+                      <td className="px-3 py-3 hidden md:table-cell">
                         {inst.commLineType
-                          ? <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded font-medium">{inst.commLineTypeLabel}</span>
+                          ? <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded font-medium whitespace-nowrap">{inst.commLineTypeLabel}</span>
                           : <span className="text-gray-300">-</span>}
                       </td>
-                      {[inst.useArs, inst.useOtp, inst.useFirmBanking].map((v, i) => (
-                        <td key={i} className="px-3 py-3">
-                          <span className={clsx('px-2 py-1 text-xs rounded font-medium',
-                            v ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
-                            {v ? '사용' : '-'}
-                          </span>
-                        </td>
-                      ))}
+                      <td className="px-3 py-3 hidden lg:table-cell">
+                        <span className={clsx('px-2 py-1 text-xs rounded font-medium whitespace-nowrap',
+                          inst.useArs ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
+                          {inst.useArs ? '사용' : '-'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 hidden lg:table-cell">
+                        <span className={clsx('px-2 py-1 text-xs rounded font-medium whitespace-nowrap',
+                          inst.useOtp ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
+                          {inst.useOtp ? '사용' : '-'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 hidden md:table-cell">
+                        <span className={clsx('px-2 py-1 text-xs rounded font-medium whitespace-nowrap',
+                          inst.useFirmBanking ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-400')}>
+                          {inst.useFirmBanking ? '사용' : '-'}
+                        </span>
+                      </td>
                       <td className="px-3 py-3">
-                        <span className={clsx('px-2.5 py-1 rounded-full text-xs font-medium', STATUS_BADGE[inst.status])}>
+                        <span className={clsx('px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap', STATUS_BADGE[inst.status])}>
                           {inst.statusLabel}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
+                      <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap hidden lg:table-cell">
                         {new Date(inst.createdAt).toLocaleDateString('ko-KR')}
                       </td>
                       <td className="px-3 py-3" onClick={e => e.stopPropagation()}>

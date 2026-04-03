@@ -177,13 +177,13 @@ public class Institution {
     }
 
     public enum CommLineType {
-        INTERNET, API, DEDICATED, VPN;
+        PUBLIC, DEDICATED, PUBLIC_VPN, DEDICATED_VPN;
         public String getLabel() {
             return switch (this) {
-                case INTERNET -> "인터넷";
-                case API -> "API";
-                case DEDICATED -> "전용선";
-                case VPN -> "VPN";
+                case PUBLIC        -> "공중망";
+                case DEDICATED     -> "전용회선";
+                case PUBLIC_VPN    -> "공중망 + VPN";
+                case DEDICATED_VPN -> "전용회선 + VPN";
             };
         }
     }

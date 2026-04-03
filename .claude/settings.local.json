@@ -33,7 +33,10 @@
       "Bash(xargs cat:*)",
       "Bash(xargs -I{} taskkill //F //PID {})",
       "Bash(npm run:*)",
-      "Bash(./gradlew compileJava --no-daemon -q)"
+      "Bash(./gradlew compileJava --no-daemon -q)",
+      "Bash(./gradlew bootRun)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(cmd.exe:*)"
     ]
   }
 }
